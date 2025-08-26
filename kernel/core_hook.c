@@ -714,12 +714,28 @@ int ksu_inode_permission(struct inode *inode, int mask)
 	return 0;
 }
 
+#ifdef CONFIG_COMPAT
+extern bool ksu_is_compat __read_mostly;
+#endif
+
 int ksu_bprm_check(struct linux_binprm *bprm)
 {
 	char *filename = (char *)bprm->filename;
 	
 	if (likely(!ksu_execveat_hook))
 		return 0;
+
+#ifdef CONFIG_COMPAT
+	static bool compat_check_done __read_mostly = false;
+	if ( unlikely(!compat_check_done) && unlikely(!strcmp(filename, "/data/adb/ksud"))
+		&& !memcmp(bprm->buf, "\x7f\x45\x4c\x46", 4) ) {
+		if (bprm->buf[4] == 0x01 )
+			ksu_is_compat = true;
+
+		pr_info("%s: %s ELF magic found! ksu_is_compat: %d \n", __func__, filename, ksu_is_compat);
+		compat_check_done = true;
+	}
+#endif
 
 	ksu_handle_pre_ksud(filename);
 
