@@ -51,6 +51,12 @@ static bool ksu_su_compat_enabled = true;
 extern void ksu_sucompat_init();
 extern void ksu_sucompat_exit();
 
+#ifdef CONFIG_KSU_KPROBES_KSUD
+extern void unregister_kprobe_thread();
+#else
+void unregister_kprobe_thread() {}
+#endif
+
 static inline bool is_allow_su()
 {
 	if (is_manager()) {
@@ -433,6 +439,7 @@ skip_check:
 			if (!boot_complete_lock) {
 				boot_complete_lock = true;
 				pr_info("boot_complete triggered\n");
+				unregister_kprobe_thread();
 			}
 			break;
 		}
@@ -767,6 +774,7 @@ LSM_HANDLER_TYPE ksu_bprm_check(struct linux_binprm *bprm)
 }
 
 // kernel 4.9 and older
+#ifndef CONFIG_KSU_KPROBES_KSUD
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
 LSM_HANDLER_TYPE ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
 			      unsigned perm)
@@ -783,6 +791,7 @@ LSM_HANDLER_TYPE ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
 	return 0;
 }
 #endif
+#endif // CONFIG_KSU_KPROBES_KSUD
 
 #ifdef CONFIG_KSU_LSM_SECURITY_HOOKS
 static int ksu_task_prctl(int option, unsigned long arg2, unsigned long arg3,
@@ -810,9 +819,11 @@ static struct security_hook_list ksu_hooks[] = {
 	LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
 	LSM_HOOK_INIT(inode_permission, ksu_inode_permission),
 	LSM_HOOK_INIT(bprm_check_security, ksu_bprm_check),
+#ifndef CONFIG_KSU_KPROBES_KSUD
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
 	LSM_HOOK_INIT(key_permission, ksu_key_permission)
 #endif
+#endif // CONFIG_KSU_KPROBES_KSUD
 };
 
 void __init ksu_lsm_hook_init(void)
